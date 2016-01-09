@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 
 n = 100
-ns = 8      # サンプル数
+ns = 4      # サンプル数
 
 theta0 = 1.0
 theta1 = 16.0
