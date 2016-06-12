@@ -9,15 +9,18 @@ import matplotlib.pyplot as plt
 
 
 #平均
-mu1 = np.array([-2,-2])
-mu2 = np.array([2,2])
+mu1 = np.array([-4,-4])
+mu2 = np.array([4,4])
+mu3 = np.array([-4,4])
 #共分散
-cov1 = np.array([[2,0], [0,2]])
-cov2 = np.array([[2,0], [0,2]])
+cov1 = np.array([[1,0], [0,1]])
+cov2 = np.array([[1,0], [0,1]])
 
 A = np.random.multivariate_normal(mu1,cov1,100)
-B = np.random.multivariate_normal(mu2,cov2,100)
-
+B1 = np.random.multivariate_normal(mu2,cov2,50)
+B2 = np.random.multivariate_normal(mu3,cov2,50)
+B = np.r_[B1, B2]
+print B
 
 def gen_cal_w(A, B, cov1, cov2, C1=1, C2=1):
     muA = np.average(A.T, axis=1).T
