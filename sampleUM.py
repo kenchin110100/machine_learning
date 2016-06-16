@@ -85,11 +85,11 @@ class UM():
         return dict_word_id, dict_id_word
 
     # テキストファイルの読み込み
-    def readtxt(self, path):
+    def readtxt(self, path, LF='\n'):
         f = open(path)
         lines = f.readlines()
         f.close
-        list_bags = [row.rstrip('\r\n').split(" ") for row in lines]
+        list_bags = [row.rstrip(LF).split(" ") for row in lines]
         return list_bags
 
     # 初期化
@@ -100,13 +100,19 @@ class UM():
     # Estep: 負担率の計算
     def e_step(self):
         for d in range(self.D):
+            # オーバーフロー対策
+            list_overflow = np.array([0.0 for i in range(self.K)], dtype=float)
             for z in range(self.K):
-                qdk = self.list_theta[z]
+                qdk = np.log(self.list_theta[z])
                 non_zero_index = np.nonzero(self.list_d_w[d])[0]
                 for i in non_zero_index:
-                    qdk *= self.list_phi[z][i]**self.list_d_w[d][i]
-                self.list_qdk[d][z] = qdk
-            self.list_qdk[d] /= np.sum(self.list_qdk[d])
+                    qdk += self.list_d_w[d][i] * np.log(self.list_phi[z][i])
+                list_overflow[z] = qdk
+            max_log = np.max(list_overflow)
+            list_overflow -= max_log
+            sum_qdk_d = np.sum([np.exp(num) for num in list_overflow])
+            list_overflow -= np.log(sum_qdk_d)
+            self.list_qdk[d] = np.array([np.exp(num) for num in list_overflow])
 
     # Mstep: thetaとphiの更新
     def m_step(self):
@@ -119,19 +125,26 @@ class UM():
 
     # stop判定するためのconvergeの計算
     def cal_likelihood(self):
-        list_p_d = []
+        list_likelihood = []
         for d in range(self.D):
             non_zero_index = np.nonzero(self.list_d_w[d])[0]
-            list_p_dk = []
+            # オーバーフロー対策
+            list_overflow = []
+            l_document = 0.0
             for z in range(self.K):
                 # print self.list_theta
-                p_dk = self.list_theta[z]
+                l_document += np.log(self.list_theta[z])
                 for i in non_zero_index:
-                    p_dk *= self.list_phi[z][i]**self.list_d_w[d][i]
-                list_p_dk.append(p_dk)
-            list_p_d.append(np.log(np.sum(list_p_dk)))
+                    l_document += self.list_d_w[d][i] * np.log(self.list_phi[z][i])
+                list_overflow.append(l_document)
+            max_log = np.max(list_overflow)
+            likelihood = 0.0
+            for l_document in list_overflow:
+                likelihood += np.exp(l_document - max_log)
+            likelihood = np.log(likelihood) + max_log
+            list_likelihood.append(likelihood)
 
-        return np.sum(list_p_d)
+        return np.sum(list_likelihood)/len(list_likelihood)
 
 
     # list_d_wの作成
@@ -167,8 +180,8 @@ class UM():
     def infer(self, list_words):
         try:
             # 学習が先に行われていなければエラーを上げる
-            if self.theta == None:
-                raise CalError('Please fit first')
+            if self.list_theta == None:
+                raise NameError('calculation first')
             # すべての単語が辞書に含まれていなければエラーを上げる
             for word in list_words:
                 if word in self.dict_word_id:
@@ -176,17 +189,21 @@ class UM():
             else:
                 raise KeyError('No word found in dict')
 
-            list_probs = []
+            list_overflow = []
             for i in range(self.K):
-                prob = list_theta[i]
+                prob = 0.0
+                prob += np.log(self.list_theta[i])
                 for word in list_words:
                     if word in self.dict_word_id:
-                        prob *= list_dict_phi[i][word]
-                list_probs.append(prob)
+                        prob += self.list_dict_phi[i][word]
+                list_overflow.append(prob)
+            max_log = np.max(list_overflow)
+            list_overflow = [np.exp(num - max_log) for num in list_overflow]
             # 正規化
-            list_prob = np.array(list_prob)/np.sum(list_prob)
+            list_prob = np.array(list_overflow)/np.sum(list_overflow)
             return list_prob
-        except CalError:
+
+        except NameError:
             raise
         except KeyError:
             raise

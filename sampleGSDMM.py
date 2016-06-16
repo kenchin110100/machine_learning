@@ -188,8 +188,8 @@ class GSDMM():
     def infer(self, list_words):
         try:
             # 学習が先に行われていなければエラーを上げる
-            if self.theta == None:
-                raise CalError('Please fit first')
+            if self.list_theta == None:
+                raise NameError('Please fit first')
             # すべての単語が辞書に含まれていなければエラーを上げる
             for word in list_words:
                 if word in self.dict_word_id:
@@ -197,17 +197,21 @@ class GSDMM():
             else:
                 raise KeyError('No word found in dict')
 
-            list_probs = []
+            list_overflow = []
             for i in range(self.K):
-                prob = list_theta[i]
+                prob = 0.0
+                prob += np.log(self.list_theta[i])
                 for word in list_words:
                     if word in self.dict_word_id:
-                        prob *= list_dict_phi[i][word]
-                list_probs.append(prob)
+                        prob += np.log(self.list_dict_phi[i][word])
+                list_overflow.append(prob)
+            log_max = np.max(list_overflow)
+            list_overflow = np.array(list_overflow) - log_max
             # 正規化
-            list_prob = np.array(list_prob)/np.sum(list_prob)
+            list_prob = np.exp(list_overflow)/np.sum(np.exp(list_overflow))
             return list_prob
-        except CalError:
+
+        except NameError:
             raise
         except KeyError:
             raise
