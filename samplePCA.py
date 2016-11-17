@@ -3,10 +3,12 @@
 PCAをするためのサンプル(クラシックな手法)
 """
 import numpy as np
+from filer2.filer2 import Filer
+import matplotlib.pyplot as plt
 
-data = np.random.randn(30,10)
+#data = np.random.randn(30,10)
 
-print data
+# print data
 
 # 次元数の設定
 K = 2
@@ -28,8 +30,30 @@ def PCA(data, K):
     V = data.dot(U.T)
     return V, key_la[:K]
 
+list_x = Filer.readcsv('./iris.csv', option='U')
+# カラム名の削除
+del list_x[0]
+list_x = np.array(np.array(list_x)[:,[0,1,2,3]], dtype=float)
 
-V, la = PCA(data, K)
+# print list_x
 
-print V
-print la
+list_z, la = PCA(data=list_x,
+            K=2)
+print list_z
+
+x_setona = list_z.T[0][0:50]
+y_setona = list_z.T[1][0:50]
+x_versi = list_z.T[0][50:100]
+y_versi = list_z.T[1][50:100]
+x_virgin = list_z.T[0][100:150]
+y_virgin = list_z.T[1][100:150]
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+se = ax.scatter(x_setona, y_setona, s=25, marker='o', color='r')
+ve = ax.scatter(x_versi, y_versi, s=25, marker='x', color='g')
+vi = ax.scatter(x_virgin, y_virgin, s=25, marker='^', color='b')
+ax.legend((se, ve, vi), ('setona', 'versicolor', 'virginica'), loc='upper left')
+
+ax.grid(True)
+plt.show()
