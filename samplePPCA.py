@@ -2,13 +2,12 @@
 """
 probabilistic PCAの実装
 EM algorithmの推定
-未完成
 """
 import numpy as np
 import matplotlib.pyplot as plt
 from filer2.filer2 import Filer
 
-def PPCA(list_data, K=3):
+def PPCA(list_data, K=2):
     """
     list_data: 次元削減をしたいデータの集合
     K: 何次元に削減するか
@@ -16,19 +15,17 @@ def PPCA(list_data, K=3):
     # list_dataをXに変換
     X = np.array(list_data).T
     # Wの初期化
-    W =np.random.randn(len(list_data[0]), K)
-    print W
+    W =np.random.randn(len(X), K)
     # sigmaの初期化
-    sigma = 1
-    counter = 0
-    while counter < 3:
+    sigma = np.array([[1]])
+    old_likelihood = - 10000
+    delta = 100
+    while delta > 0.01:
         E_z, list_E_zz = E_step(W, X, sigma)
         W, sigma = M_step(X, E_z, list_E_zz)
-        sigma = sigma[0]
-        #likelihood = cal_likelihood(X, E_z, list_E_zz, W, sigma)
-        #delta = np.abs((likelihood - old_likelihood)[0][0])
-        #old_likelihood = likelihood
-        counter += 1
+        likelihood = cal_likelihood(X, E_z, list_E_zz, W, sigma)
+        delta = np.abs((likelihood - old_likelihood)[0][0])
+        old_likelihood = likelihood
 
     return E_z.T
 
@@ -39,14 +36,9 @@ def E_step(W, X, sigma):
     # Mのinvの計算
     M_inv = np.linalg.inv(M)
     # X_aveの計算
-    x_ave = np.average(X, axis=1)[:,np.newaxis]
+    x_ave = np.broadcast_to(np.average(X, axis=1)[:,np.newaxis], (len(X), len(X[0])))
     # E_zの計算
-    E_z = []
-    for i in range(len(X[0])):
-        x_tmp = X[:,i][:,np.newaxis]
-        E_z_tmp = M_inv.dot(W.T).dot(x_tmp - x_ave)
-        E_z.append([num1 for num in E_z_tmp for num1 in num])
-    E_z = np.array(E_z).T
+    E_z = M_inv.dot(W.T).dot(X - x_ave)
     # list_E_zzの計算
     list_E_zz = []
     for i in range(len(X[0])):
@@ -66,7 +58,8 @@ def M_step(X, E_z, list_E_zz):
     sum_E_zz = np.zeros((len(E_z), len(E_z)))
     for E_zz in list_E_zz:
         sum_E_zz += E_zz
-    W = W.dot(sum_E_zz.T)
+    sum_E_zz_inv = np.linalg.inv(sum_E_zz)
+    W = W.dot(sum_E_zz_inv)
     # sigmaの計算
     sigma = 0
     for i in range(len(X[0])):
@@ -100,7 +93,7 @@ list_z = PPCA(list_data=list_x,
               K=2)
 
 # print list_x
-#print list_z
+print list_z
 
 x_setona = list_z.T[0][0:50]
 y_setona = list_z.T[1][0:50]

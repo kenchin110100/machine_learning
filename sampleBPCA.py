@@ -2,7 +2,6 @@
 """
 Bayes PCAの実装
 EM algorithmの推定
-未完成
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,16 +20,14 @@ def BPCA(list_data, K=2):
     sigma = 0
     # 変化量
     delta = 10000
-    max_likelihood = 0
-    while delta > 2000:
+    old_likelihood = 0
+    while delta > 0.01:
         W_old = W
         E_z, list_E_zz = E_step(W, X, sigma)
         W, sigma = M_step(X, E_z, list_E_zz, W, sigma)
         likelihood = cal_likelihood(X, E_z, list_E_zz, W, sigma)*-1
-        delta = np.abs((likelihood - max_likelihood)[0][0])
-        print delta
-        if max_likelihood < likelihood:
-            max_likelihood = likelihood
+        delta = np.abs((likelihood - old_likelihood)[0][0])
+        old_likelihood = likelihood
     return E_z.T
 
 # E-step
@@ -66,7 +63,9 @@ def M_step(X, E_z, list_E_zz, W_old, sigma_old):
     sum_E_zz = np.zeros((len(E_z), len(E_z)))
     for E_zz in list_E_zz:
         sum_E_zz += E_zz
-    W = W.dot((sum_E_zz+sigma_old*np.diag(list_alpha)).T)
+    sum_E_zz += sigma_old*np.diag(list_alpha)
+    sum_E_zz_inv = np.linalg.inv(sum_E_zz)
+    W = W.dot(sum_E_zz_inv)
     # sigmaの計算
     sigma = 0
     for i in range(len(X[0])):
