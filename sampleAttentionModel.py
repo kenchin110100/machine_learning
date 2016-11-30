@@ -94,8 +94,9 @@ class AttentionLM(Chain):
     def __init__(self, embed_size, hidden_size, vocab_size, label_size):
         super(AttentionLM, self).__init__(
             emb = SrcEmbed(vocab_size, embed_size),
-            enc = LSTMEncoder(embed_size, hidden_size),
-            att = Attention(hidden_size),
+            enc_f = LSTMEncoder(embed_size, hidden_size),
+            enc_b = LSTMEncoder(embed_size, hidden_size),
+            att = Attention(hidden_size*2),
             outae = links.Linear(hidden_size, hidden_size),
             outey = links.Linear(hidden_size, label_size),
         )
@@ -113,9 +114,18 @@ class AttentionLM(Chain):
         self.x_list.append(self.emb(x))
 
     def encode(self):
+        h_list_f = []
+        h_list_b = []
         for x in self.x_list:
-            self.h = self.enc(x)
-            self.h_list.append(self.h)
+            self.h = self.enc_f(x)
+            h_list_f.append(self.h)
+        for x in reversed(self.x_list):
+            self.h = self.enc_b(x)
+            h_list_b.append(self.h)
+        h_list_b.reverse()
+        for x1, x2 in zip(h_list_f, h_list_b):
+            self.h_list.append(functions.concat([x1, x2]))
+
 
     def decode(self):
         aa = self.att(self.h_list)
