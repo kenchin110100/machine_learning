@@ -97,7 +97,7 @@ class AttentionLM(Chain):
             enc_f = LSTMEncoder(embed_size, hidden_size),
             enc_b = LSTMEncoder(embed_size, hidden_size),
             att = Attention(hidden_size*2),
-            outae = links.Linear(hidden_size, hidden_size),
+            outae = links.Linear(hidden_size*2, hidden_size),
             outey = links.Linear(hidden_size, label_size),
         )
         self.vocab_size = vocab_size
@@ -107,6 +107,8 @@ class AttentionLM(Chain):
 
     def reset(self):
         self.zerograds()
+        self.enc_f.lstm.reset_state()
+        self.enc_b.lstm.reset_state()
         self.x_list = []
         self.h_list = []
 
