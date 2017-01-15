@@ -4,6 +4,7 @@ EMアルゴリズムを用いたGMMの実装
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn import metrics
 
 
 # 正規分布の確率密度関数値を返すfunction
@@ -54,7 +55,8 @@ def main(arr, k=2):
 
 mu1 = [-2,-2]
 mu2 = [2,2]
-cov = [[2,0.5],[0.5,2]]
+cov = [[2,1],[1,2]]
+np.random.seed(0)
 a = np.random.multivariate_normal(mu1,cov,100)
 b = np.random.multivariate_normal(mu2,cov,100)
 arr = np.r_[a, b]
@@ -62,11 +64,19 @@ arr = np.r_[a, b]
 q_nk = main(arr, k=2)
 
 list_color = []
+label_pred = []
+label_true = [1]*100 + [0]*100
+
 for row in q_nk:
-    if row[0] > 0.5:
+    if row[0] < 0.5:
         list_color.append("b")
+        label_pred.append(1)
     else:
         list_color.append("g")
+        label_pred.append(0)
 for i in range(len(arr)):
     plt.plot(arr[i][0], arr[i][1], '.', color=list_color[i])
+
+
+print metrics.normalized_mutual_info_score(label_true, label_pred)
 plt.show()
