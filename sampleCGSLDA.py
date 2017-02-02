@@ -23,7 +23,7 @@ class LDA:
         self.k = k          # num of topic
         self.alpha = alpha  # alpha
         self.beta = beta    # beta
-        self.v = np.argmax(self.bw) + 1     # size of vocaburary
+        self.v = np.max(self.bw) + 1     # size of vocaburary
         # p(k|d)　ドキュメントがトピックkの確率
         self.k_d = np.zeros((self.bw.shape[0], self.k)) + self.alpha
         # p(w|k)  トピックkからwが発生する確率
