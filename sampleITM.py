@@ -33,18 +33,22 @@ class ITM:
                      for word in words]
                     for words in self.bw]
         # トピックKに割り当てられた単語数(K, V)
-        self.K_V = np.zeros(shape=(self.K, self.V))
+        self.K_V = np.zeros(shape=(self.K, self.V)) + self.beta
+        self.sum_K_V = None
         # トピックKに割り当てられた制約C内で語彙Vが出現した回数(K, C, V)
         self.K_C_V = []
         # 文書D内で、トピックKに割り当てられた単語の数(D, K)
-        self.D_K = np.zeros(shape=(self.D, self.K))
+        self.D_K = np.zeros(shape=(self.D, self.K)) + self.alpha
+        self.sum_D_K = None
 
     # K_V, D_Kの集計
     def set_params(self):
         for d, (words, zs) in enumerate(zip(self.bw, self.z_k)):
             for w, z in zip(words, zs):
-                self.D_K[d][z] += 1
-                self.K_V[z][w] += 1
+                self.D_K[d][z] += 1.0
+                self.K_V[z][w] += 1.0
+        self.sum_D_K = np.sum(self.D_K, axis=1)
+        self.sum_K_V = np.sum(self.K_V, axis=1)
 
     # 単語wが制約に含まれるかどうか調べる
     def search_const(self, w):
@@ -66,17 +70,19 @@ class ITM:
                 z: トピック
                 """
                 # 該当単語を抜く
-                self.K_V[z][w] -= 1
-                self.D_K[d][z] -= 1
+                self.K_V[z][w] -= 1.0
+                self.D_K[d][z] -= 1.0
+                self.sum_K_V[z] -= 1.0
+                self.sum_D_K[d] -= 1.0
                 # 制約化の単語を抜く
                 bool_, const_id = self.search_const(w)
                 if bool_:
-                    self.K_C_V[z][const_id][w] -= 1
+                    self.K_C_V[z][const_id][w] -= 1.0
 
                 # p(z=k|Z,W)の計算
-                probs = np.zeros(self.K)
                 # 単語wが制約下にある場合
                 if bool_:
+                    probs = np.zeros(self.K)
                     for k in range(self.K):
                         T_dk = self.D_K[d][k]
                         T_d = np.sum(self.D_K[d])
@@ -85,34 +91,31 @@ class ITM:
                         C_l = len(self.const[const_id])
                         W_klw = self.K_C_V[k][const_id][w]
                         W_kl = np.sum(self.K_C_V[k][const_id])
-                        prob = (T_dk + self.alpha) / (T_d + self.alpha * self.K) \
-                             * (P_kl + C_l*self.beta) / (P_k + self.V * self.beta) \
+                        prob = T_dk / T_d \
+                             * (P_kl + C_l*self.beta) / P_k \
                              * (W_klw + self.eta) / (W_kl + C_l * self.eta)
                         probs[k] = prob
                 # 単語wが制約下にない場合
                 else:
-                    for k in range(self.K):
-                        T_dk = self.D_K[d][k]
-                        T_d = np.sum(self.D_K[d])
-                        P_kw = self.K_V[k][w]
-                        P_k = np.sum(self.K_V[k])
-                        prob = (T_dk + self.alpha) / (T_d + self.K * self.alpha) \
-                             * (P_kw + self.beta) / (P_k + self.V * self.beta)
-                        probs[k] = prob
+                    probs = np.array([self.D_K[d][k] / self.sum_D_K[d]
+                             * self.K_V[k][w] / self.sum_K_V[k]
+                             for k in range(self.K)])
                 # 正規化してサンプリング
                 probs /= np.sum(probs)
                 # サンプリング
-                z_new = np.random.multinomial(1, probs).argmax()
+                z_new = np.random.choice(range(self.K), p=probs)
                 # 新しいトピックを代入
                 self.z_k[d][n] = z_new
-                self.K_V[z_new][w] += 1
-                self.D_K[d][z_new] += 1
+                self.K_V[z_new][w] += 1.0
+                self.D_K[d][z_new] += 1.0
+                self.sum_K_V[z_new] += 1.0
+                self.sum_D_K[d] += 1.0
                 if bool_:
-                    self.K_C_V[z_new][const_id][w] += 1
+                    self.K_C_V[z_new][const_id][w] += 1.0
 
     # トピック分布の表示
     def get_topic(self):
-        return (self.D_K + self.alpha) / np.sum((self.D_K + self.alpha), axis=1)[:, np.newaxis]
+        return self.D_K / np.sum(self.D_K, axis=1)[:, np.newaxis]
 
     # 制約のパラメータの更新
     def set_const_params(self):
@@ -121,7 +124,7 @@ class ITM:
             for w, z in zip(words, zs):
                 bool_, const_id = self.search_const(w)
                 if bool_:
-                    self.K_C_V[z][const_id][w] += 1
+                    self.K_C_V[z][const_id][w] += 1.0
 
     # 制約の追加
     def set_const(self, const_new = []):
@@ -151,7 +154,7 @@ class ITM:
 
     # 単語分布の表示
     def get_word(self):
-        return (self.K_V + self.beta) / np.sum((self.K_V + self.beta), axis=1)[:, np.newaxis]
+        return self.K_V / np.sum(self.K_V, axis=1)[:, np.newaxis]
 
 
 def main():
