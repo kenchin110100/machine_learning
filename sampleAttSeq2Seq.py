@@ -187,6 +187,7 @@ class Att_Seq2Seq(Chain):
         """
         att_f, att_b = self.attention(self.fs, self.bs, self.h)
         t, self.c, self.h = self.decoder(w, self.c, self.h, att_f, att_b)
+        lambda_ = functions.sigmoid(self.predictor(self.h))
         return t
 
     def reset(self):

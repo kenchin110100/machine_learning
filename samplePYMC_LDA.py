@@ -35,7 +35,7 @@ class LDA(object):
         # 結果が格納されるインスタンス
         self.mcmc = None
 
-    def inference(self, iter_=100):
+    def inference(self, iter_=5000, burn=1000):
         theta = pm.Container([pm.CompletedDirichlet("theta_%s"%d,
                                                     pm.Dirichlet("ptheta_%s"%d,
                                                                  theta=self.alpha)
@@ -47,6 +47,7 @@ class LDA(object):
                             for k in range(self.K)])
         z_d = pm.Container([pm.Categorical("z_%s"%d,
                                            p=theta[d],
+                                           value=np.random.randint(self.K,size=len(self.bw[d])),
                                            size=len(self.bw[d]))
                             for d in range(self.D)])
         w_z = pm.Container([pm.Categorical("w_%s_%s"%(d, w),
@@ -57,7 +58,7 @@ class LDA(object):
 
         model = pm.Model([theta, phi, z_d, w_z])
         self.mcmc = pm.MCMC(model)
-        self.mcmc.sample(iter_)
+        self.mcmc.sample(iter=iter_, burn=burn)
 
     def get_words(self):
         return np.array([list(self.mcmc.trace("phi_%s"%k)[-1][0]) for k in range(self.K)], dtype='float16')
@@ -68,7 +69,7 @@ class LDA(object):
 
 def main():
     lda = LDA(bag_of_word, K=3, alpha=0.1, beta=0.1)
-    lda.inference(iter_=300)
+    lda.inference(iter_=5000, burn=1000)
     print "====トピック分布===="
     print lda.get_topics()
     print "===================="
