@@ -4,9 +4,8 @@ Attention Model + LSTMを使って文書分類をするコード
 """
 
 import numpy as np
+import random
 from chainer import Chain, Variable, cuda, functions, links
-
-from sampleSeq2Sep import LSTM_Encoder
 
 
 class LstmEncoder(Chain):
@@ -45,7 +44,7 @@ class Attention(Chain):
             # 入力されたベクトルの線形結合層
             fh=links.Linear(hidden_size, hidden_size),
             # 隠れ層サイズのベクトルをスカラーに変換するための線形結合層
-            hw=links.Linear(hidden_size, 1),
+            hw=links.Linear(hidden_size, 1)
         )
         # 隠れ層のサイズを記憶
         self.hidden_size = hidden_size
@@ -65,17 +64,19 @@ class Attention(Chain):
         :return: 順向きのEncoderの中間ベクトルの加重平均と逆向きのEncoderの中間ベクトルの加重平均
         """
         # ミニバッチのサイズを記憶
-        batch_size = h.data.shape[0]
+        batch_size = inputs[0].data.shape[0]
         # ウェイトを記録するためのリストの初期化
         ws = []
         # ウェイトの合計値を計算するための値を初期化
         sum_w = Variable(self.ARR.zeros((batch_size, 1), dtype='float32'))
         # Encoderの中間ベクトルとDecoderの中間ベクトルを使ってウェイトの計算
-        for i, mask in inputs, masks:
+        for i, mask in zip(inputs, masks):
             # 入力されたベクトルを線型結合して、中間ベクトルを作成
             w = functions.tanh(self.fh(i))
             # 中間ベクトルからウェイトを計算してsoftmaxを計算するためにexpする
             w = functions.exp(self.hw(w))
+            # maskと掛け合わせることができるようにshapeを変更する
+            mask = functions.reshape(mask, (batch_size, 1))
             # 計算したウェイトを記録、ここでmaskも同時に行う
             ws.append(w * mask)
             sum_w += w * mask
@@ -107,7 +108,7 @@ class AttClassifier(Chain):
             # 順向きのEncoder
             f_encoder = LstmEncoder(input_size, hidden_size),
             # 逆向きのEncoder
-            b_encoder = LstmEncoder(vocab_size, hidden_size),
+            b_encoder = LstmEncoder(input_size, hidden_size),
             # Attention Model
             attention = Attention(hidden_size*2, flag_gpu, flag_train),
             # 加重平均されたベクトルからラベルサイズのベクトルを出力
@@ -166,7 +167,7 @@ class AttClassifier(Chain):
         """
         # trainの場合は加重平均ベクトルのみを、testの場合はウェイトも返す
         if self.flag_train == True:
-            att_vecs, _ = self.attention(self.hs, masks)
+            att_vecs = self.attention(self.hs, masks)
             return self.predictor(functions.tanh(att_vecs))
         else:
             att_vecs, weights = self.attention(self.hs, masks)
@@ -189,7 +190,7 @@ class AttClassifier(Chain):
         self.zerograds()
 
 
-class DatasetIterator(Object):
+class DatasetIterator(object):
     def __init__(self, x_train, y_train, vec_size, batch_size):
         """
         データセットクラス
@@ -205,7 +206,7 @@ class DatasetIterator(Object):
         self.count = 0
 
         # 初期化
-        self.xy_s = self.set_params()
+        self.xy_s = self.set_params(x_train, y_train)
         # シャッフル
         self.shuffle()
 
@@ -215,7 +216,7 @@ class DatasetIterator(Object):
 
 
     def next(self):
-        if self.count * batch_size > self.num_data:
+        if self.count * self.batch_size >= self.num_data:
             raise StopIteration()
         # バッチサイズの文のデータを取り出す
         xy_s = self.xy_s[self.count * self.batch_size: (self.count+1) * self.batch_size]
@@ -229,6 +230,7 @@ class DatasetIterator(Object):
         xs = np.transpose(np.array(xs, dtype='float32'), (1,0,2))
         masks = np.transpose(np.array(masks, dtype='float32'))
         ys = np.array(ys, dtype='int32')
+        self.count += 1
 
         return (xs, ys, masks)
 
@@ -259,7 +261,7 @@ class DatasetIterator(Object):
         """
         データセットの前処理
         """
-        assert len(x_train) != len(y_train), "XとYの長さが違います"
+        assert len(x_train) == len(y_train), "XとYの長さが違います"
 
         # シャッフルできるようにXとYのデータを繋げる
         xy_s = [{'x': x, 'y': y} for x, y in zip(x_train, y_train)]
@@ -267,7 +269,7 @@ class DatasetIterator(Object):
         return xy_s
 
 
-    def shuffle():
+    def shuffle(self):
         random.shuffle(self.xy_s)
         self.count = 0
 
@@ -282,7 +284,7 @@ def forward(inputs, masks, labels, model, ARR):
     :params ARR: cupyかnumpy
     """
     # バッチサイズの確認
-    batch_size = len(enc_words[0])
+    batch_size = len(inputs[0])
     # モデルのリセット
     model.reset()
     # 入力ベクトルのVariable化
@@ -343,7 +345,7 @@ def train():
     model.reset()
 
     # データセットクラスの初期化
-    corpuses = Dataset(x_train, y_train, BATCH_SIZE)
+    corpuses = DatasetIterator(x_train, y_train, BATCH_SIZE)
 
     # エポックの分だけ学習を回す
     for epoch in range(NUM_EPOCH):
@@ -368,10 +370,8 @@ def train():
                     ARR=np)
             # バックプロパゲーション
             loss.backward()
-            # 勾配の更新
+            # 勾配の更新,v2.0.0からzero_gradsもupdate内で呼ばれる
             opt.update()
-            # オプティマイザーの初期化
-            opt.zero_grads()
 
         # エポックごとにモデルを保存
         serializers.save_npz(OUTPUT_PATH%epoch, model)
