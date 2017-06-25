@@ -1,6 +1,9 @@
 # coding: utf-8
 """
 Attention Model + LSTMを使って文書分類をするコード
+todo: 属性の入力を1以下にする
+todo: 損失関数をcross entropyにする
+todo: 全結合層にdropout、もしくはBNを導入する
 """
 
 import numpy as np
@@ -112,7 +115,8 @@ class AttClassifier(Chain):
             # Attention Model
             attention=Attention(hidden_size*2, flag_gpu, flag_train),
             # 加重平均されたベクトルからラベルサイズのベクトルを出力
-            predictor=links.Linear(hidden_size*2, label_size)
+            predictor1=links.Linear(hidden_size*2, hidden_size),
+            predictor2=links.Linear(hidden_size, label_size),
         )
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -166,11 +170,13 @@ class AttClassifier(Chain):
         """
         # trainの場合は加重平均ベクトルのみを、testの場合はウェイトも返す
         if self.flag_train:
-            att_vecs = self.attention(self.hs, masks)
-            return self.predictor(functions.tanh(att_vecs))
+            att_vecs, _ = self.attention(self.hs, masks)
+            h = self.predictor1(functions.tanh(att_vecs))
+            return self.predictor2(functions.tanh(h))
         else:
             att_vecs, weights = self.attention(self.hs, masks)
-            return self.predictor(functions.tanh(att_vecs)), weights
+            h = self.predictor1(functions.tanh(att_vecs))
+            return self.predictor2(functions.tanh(h)), weights
 
     def reset(self):
         """
