@@ -16,8 +16,8 @@ class LstmEncoder(Chain):
         :param hidden_size: 隠れ層のサイズ
         """
         super(LstmEncoder, self).__init__(
-            eh = links.Linear(input_size, 4 * hidden_size),
-            hh = links.Linear(hidden_size, 4 * hidden_size)
+            eh=links.Linear(input_size, 4 * hidden_size),
+            hh=links.Linear(hidden_size, 4 * hidden_size)
         )
 
     def __call__(self, x, c, h):
@@ -89,7 +89,7 @@ class Attention(Chain):
             # ウェイト * Encoderの中間ベクトルを出力するベクトルに足していく
             att_vecs += functions.reshape(functions.batch_matmul(i, w), (batch_size, self.hidden_size))
         # trainならベクトルのみを、テストならベクトルと重みを返す
-        if self.flag_train == True:
+        if self.flag_train:
             return att_vecs
         else:
             return att_vecs, ws
@@ -106,13 +106,13 @@ class AttClassifier(Chain):
         """
         super(AttClassifier, self).__init__(
             # 順向きのEncoder
-            f_encoder = LstmEncoder(input_size, hidden_size),
+            f_encoder=LstmEncoder(input_size, hidden_size),
             # 逆向きのEncoder
-            b_encoder = LstmEncoder(input_size, hidden_size),
+            b_encoder=LstmEncoder(input_size, hidden_size),
             # Attention Model
-            attention = Attention(hidden_size*2, flag_gpu, flag_train),
+            attention=Attention(hidden_size*2, flag_gpu, flag_train),
             # 加重平均されたベクトルからラベルサイズのベクトルを出力
-            predictor = links.Linear(hidden_size*2, label_size)
+            predictor=links.Linear(hidden_size*2, label_size)
         )
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -158,7 +158,6 @@ class AttClassifier(Chain):
         for f, b in zip(self.fs, self.bs):
             self.hs.append(functions.concat([f, b]))
 
-
     def predict(self, masks):
         """
         Decoderの計算
@@ -166,13 +165,12 @@ class AttClassifier(Chain):
         :return: 2次元のベクトル
         """
         # trainの場合は加重平均ベクトルのみを、testの場合はウェイトも返す
-        if self.flag_train == True:
+        if self.flag_train:
             att_vecs = self.attention(self.hs, masks)
             return self.predictor(functions.tanh(att_vecs))
         else:
             att_vecs, weights = self.attention(self.hs, masks)
             return self.predictor(functions.tanh(att_vecs)), weights
-
 
     def reset(self):
         """
@@ -206,17 +204,15 @@ class DatasetIterator(object):
         self.count = 0
 
         # 初期化
-        self.xy_s = self.set_params(x_train, y_train)
+        self.xy_s = set_params(x_train, y_train)
         # シャッフル
         self.shuffle()
-
 
     def __iter__(self):
         return self
 
-
     def next(self):
-        if self.count * self.batch_size >= self.num_data:
+        if (self.count+1) * self.batch_size > self.num_data:
             raise StopIteration()
         # バッチサイズの文のデータを取り出す
         xy_s = self.xy_s[self.count * self.batch_size: (self.count+1) * self.batch_size]
@@ -227,20 +223,19 @@ class DatasetIterator(object):
         xs, masks = self.get_reshaped_xs(xs)
         # xs, ys, masksをnumpy.array型に変換する。
         # またxs, masksに関しては転置する
-        xs = np.transpose(np.array(xs, dtype='float32'), (1,0,2))
+        xs = np.transpose(np.array(xs, dtype='float32'), (1, 0, 2))
         masks = np.transpose(np.array(masks, dtype='float32'))
         ys = np.array(ys, dtype='int32')
         self.count += 1
 
-        return (xs, ys, masks)
-
+        return xs, ys, masks
 
     def get_reshaped_xs(self, xs):
         """
         ミニバッチ内の系列長の長さを揃える
         """
         # xsの中で一番要素数が多いものを取得
-        max_len = self.get_max_len(xs)
+        max_len = get_max_len(xs)
         # 中埋めする値
         padding = np.zeros(self.vec_size)
         masks = [[1 if l < len(x) else 0 for l in range(max_len)]
@@ -249,15 +244,15 @@ class DatasetIterator(object):
                        for x in xs]
         return reshaped_xs, masks
 
-
-    def get_max_len(self, lists):
+    @staticmethod
+    def get_max_len(lists):
         """
         list_list型で、要素数が一番大きい値を返す
         """
         return np.max([len(l)for l in lists])
 
-
-    def set_params(self, x_train, y_train):
+    @staticmethod
+    def set_params(x_train, y_train):
         """
         データセットの前処理
         """
@@ -268,13 +263,51 @@ class DatasetIterator(object):
 
         return xy_s
 
-
     def shuffle(self):
         random.shuffle(self.xy_s)
         self.count = 0
 
+    def over_sampling(self, target_label, times):
+        """
+        指定したラベルをオーバーサンプリングする
+        :param target_label: 増やしたいサンプルのラベル, int
+        :param times: 何倍にしたいのか, int
+        :return:
+        """
+        assert 1 <= times, "timesには1以上の整数を設定してください"
+        over_sampled_xy_s = []
+        for xy in self.xy_s:
+            if xy['y'] == target_label:
+                for _ in range(times):
+                    over_sampled_xy_s.append(xy)
+            else:
+                over_sampled_xy_s.append(xy)
 
-def forward(inputs, masks, labels, model, ARR):
+        self.xy_s = over_sampled_xy_s
+        self.shuffle()
+
+    def under_sampling(self, target_label, times):
+        """
+        指定したラベルをアンダーサンプリングする
+        :param target_label: 減らしたいサンプルのラベル, int
+        :param times: 何割にしたいのか、[0, 1]のfloat
+        :return:
+        """
+        assert 0.0 <= times <= 1.0, "timesには[0, 1]の小数を設定してください"
+        under_sampled_xy_s = []
+        target_label_xy_s = []
+        for xy in self.xy_s:
+            if xy['y'] == target_label:
+                target_label_xy_s.append(xy)
+            else:
+                under_sampled_xy_s.append(xy)
+        num_target_label = int(len(target_label_xy_s) * times)
+        under_sampled_xy_s.extend(np.random.choice(target_label_xy_s, num_target_label))
+        self.xy_s = under_sampled_xy_s
+        self.shuffle()
+
+
+def forward(inputs, masks, labels, model, arr):
     """
     順伝播の計算
     :params inputs: 入力ベクトル
@@ -288,11 +321,11 @@ def forward(inputs, masks, labels, model, ARR):
     # モデルのリセット
     model.reset()
     # 入力ベクトルのVariable化
-    inputs = [Variable(ARR.array(row, dtype='float32')) for row in inputs]
+    inputs = [Variable(arr.array(row, dtype='float32')) for row in inputs]
     # maskベクトルのVariable化
-    masks = [Variable(ARR.array(row, dtype='float32')) for row in masks]
+    masks = [Variable(arr.array(row, dtype='float32')) for row in masks]
     # 正解ラベルのVariable化
-    labels = Variable(ARR.array(labels, dtype='int32'))
+    labels = Variable(arr.array(labels, dtype='int32'))
 
     # LSTMにより、中間層ベクトルの計算
     model.encode(inputs)
@@ -303,7 +336,7 @@ def forward(inputs, masks, labels, model, ARR):
     return loss
 
 
-def forward_test(inputs, masks, model, ARR):
+def forward_test(inputs, masks, model, arr):
     """
     順伝播の計算（予測用）
     :params inputs: 入力ベクトル
@@ -316,9 +349,9 @@ def forward_test(inputs, masks, model, ARR):
     # モデルのリセット
     model.reset()
     # 入力ベクトルのVariable化
-    inputs = [Variable(ARR.array(row, dtype='float32')) for row in inputs]
+    inputs = [Variable(arr.array(row, dtype='float32')) for row in inputs]
     # maskベクトルのVariable化
-    masks = [Variable(ARR.array(row, dtype='float32')) for row in masks]
+    masks = [Variable(arr.array(row, dtype='float32')) for row in masks]
     # modelのリセット
     model.reset()
     # 入力ベクトルのエンコード
@@ -367,12 +400,11 @@ def train():
                     masks=masks,
                     labels=y_corpus,
                     model=model,
-                    ARR=np)
+                    arr=np)
             # バックプロパゲーション
             loss.backward()
             # 勾配の更新,v2.0.0からzero_gradsもupdate内で呼ばれる
             opt.update()
 
         # エポックごとにモデルを保存
-        serializers.save_npz(OUTPUT_PATH%epoch, model)
-
+        serializers.save_npz(OUTPUT_PATH % epoch, model)
