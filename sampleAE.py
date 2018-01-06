@@ -47,8 +47,8 @@ class AE(chainer.Chain):
             mu, _ = self.encode(x)
             batchsize = len(mu.data)
             # reconstruction loss
-            loss = F.bernoulli_nll(x, self.decode(mu, sigmoid=False)) \
-                    / (batchsize)
+            # loss = F.bernoulli_nll(x, self.decode(mu, sigmoid=False)) / (batchsize)
+            loss = F.mean_squared_error(x, self.decode(mu, sigmoid=True)) / (batchsize)
             self.rec_loss = loss
             self.loss = loss
             chainer.report(

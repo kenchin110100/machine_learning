@@ -28,9 +28,9 @@ class CVAE(chainer.Chain):
             self.ld1 = L.Linear(n_latent, n_h, initialW=Xavier(n_latent, n_h))
             self.ld2 = L.Linear(n_h*2, n_in, initialW=Xavier(n_h*2, n_in))
 
-    def __call__(self, x, sigmoid=True):
+    def __call__(self, x, y, sigmoid=True):
         """AutoEncoder"""
-        return self.decode(self.encode(x)[0], sigmoid)
+        return self.decode(self.encode(x, y)[0], y, sigmoid)
 
     def encode(self, x, y):
         h1 = F.tanh(self.le1(x))
